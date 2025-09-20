@@ -10,13 +10,18 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 import asyncio
+import os
 from typing import List, Optional
 import time
 import psutil
 import torch
+import logging
 
-# Импорт из других модулей (пока заглушки)
-from ..model.config import model_config, training_config
+logger = logging.getLogger(__name__)
+
+# Импорт из других модулей
+from ..model import PrometheusGPTMini, model_config, training_config
+from ..tokenizer import BPETokenizer
 
 
 class GenerateRequest(BaseModel):
@@ -59,15 +64,48 @@ app = FastAPI(
 )
 
 
-# Глобальные переменные (пока заглушки)
+# Глобальные переменные
 model = None
 tokenizer = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Функция инициализации модели
+def initialize_model():
+    """Инициализировать модель и токенизатор"""
+    global model, tokenizer
+
+    if model is None:
+        logger.info("Initializing PrometheusGPT Mini model...")
+
+        # Создаем модель
+        model = PrometheusGPTMini()
+
+        # Создаем токенизатор (пока демо)
+        tokenizer = BPETokenizer()
+
+        # Загружаем обученную модель если есть
+        model_path = "models/prometheusgpt.pt"
+        if os.path.exists(model_path):
+            try:
+                model.load_model(model_path)
+                logger.info(f"Model loaded from {model_path}")
+            except Exception as e:
+                logger.warning(f"Could not load model: {e}")
+
+        # Переносим на устройство
+        model.to(device)
+        model.eval()
+
+        logger.info("Model initialized successfully!")
+        logger.info(f"Model info: {model.get_model_info()}")
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Проверка здоровья сервиса"""
+    # Инициализируем модель если нужно
+    initialize_model()
+
     gpu_available = torch.cuda.is_available()
 
     if gpu_available:
@@ -79,6 +117,9 @@ async def health_check():
         }
     else:
         gpu_memory_usage = None
+
+    # Информация о модели
+    model_info = model.get_model_info() if model else None
 
     return HealthResponse(
         status="healthy",
@@ -92,25 +133,46 @@ async def health_check():
 @app.post("/generate", response_model=GenerateResponse)
 async def generate_text(request: GenerateRequest):
     """Генерация текста по промпту"""
+    # Инициализируем модель если нужно
+    initialize_model()
+
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
     start_time = time.time()
 
     try:
-        # TODO: Реализовать генерацию текста
-        # Пока заглушка
-        generated_text = f"Generated text based on: {request.prompt[:50]}..."
+        # Добавляем информацию об авторе к промпту
+        author_prompt = tokenizer.prepare_text_with_author(request.prompt)
+
+        # Токенизируем
+        input_tokens = tokenizer.encode(author_prompt)
+        input_tensor = torch.tensor([input_tokens], dtype=torch.long).to(device)
+
+        # Генерируем
+        with torch.no_grad():
+            generated_tokens = model.generate(
+                input_tensor,
+                max_length=request.max_length,
+                temperature=request.temperature,
+                top_k=request.top_k,
+                top_p=request.top_p,
+                do_sample=request.do_sample
+            )
+
+        # Декодируем
+        generated_text = tokenizer.decode(generated_tokens[0].tolist())
 
         generation_time = time.time() - start_time
 
         return GenerateResponse(
             text=generated_text,
-            tokens_used=0,  # TODO: Посчитать реальные токены
+            tokens_used=len(generated_tokens[0]),
             generation_time=generation_time
         )
 
     except Exception as e:
+        logger.error(f"Generation error: {e}")
         raise HTTPException(status_code=500, detail=f"Generation error: {str(e)}")
 
 
@@ -139,11 +201,16 @@ async def generate_text_stream(request: GenerateRequest):
 @app.get("/")
 async def root():
     """Корневой endpoint"""
+    # Инициализируем модель если нужно
+    initialize_model()
+
+    model_info = model.get_model_info() if model else None
+
     return {
         "message": "PrometheusGPT Mini API",
         "author": "MagistrTheOne, Krasnodar, 2025",
         "status": "running",
-        "model_params": model_config.total_params,
+        "model_info": model_info,
         "device": str(device)
     }
 

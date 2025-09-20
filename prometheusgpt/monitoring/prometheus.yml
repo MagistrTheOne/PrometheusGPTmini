@@ -1,0 +1,40 @@
+# PrometheusGPT Mini - Prometheus Configuration
+# Author: MagistrTheOne, Krasnodar, 2025
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # PrometheusGPT API метрики
+  - job_name: 'prometheusgpt-api'
+    static_configs:
+      - targets: ['prometheusgpt-api:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # PrometheusGPT Training метрики (если запущен)
+  - job_name: 'prometheusgpt-training'
+    static_configs:
+      - targets: ['prometheusgpt-training:8001']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Node exporter для системных метрик
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # GPU метрики (если доступен nvidia-ml-py)
+  - job_name: 'gpu-metrics'
+    static_configs:
+      - targets: ['prometheusgpt-api:8000']
+    metrics_path: '/gpu_metrics'
+    scrape_interval: 10s

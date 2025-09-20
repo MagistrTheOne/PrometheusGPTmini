@@ -14,8 +14,8 @@ from typing import Optional
 class ModelConfig:
     """Конфигурация архитектуры модели для ~8M параметров"""
 
-    # Размер словаря (уменьшен для экономии параметров)
-    vocab_size: int = 16000
+    # Размер словаря (подходит для BPE токенизатора)
+    vocab_size: int = 1000
 
     # Размерность эмбеддингов (уменьшена для экономии)
     d_model: int = 256
@@ -41,6 +41,16 @@ class ModelConfig:
 
     # Инициализация весов
     init_method: str = "xavier"
+
+    # Gradient checkpointing для экономии памяти
+    use_gradient_checkpointing: bool = True
+
+    # Dynamic attention pruning
+    use_dynamic_attention: bool = False
+
+    # Параметры для dynamic attention
+    attention_prune_ratio: float = 0.2  # доля токенов/голов для отсечения
+    attention_threshold: float = 0.1  # порог для pruning
 
     def __post_init__(self):
         """Автоматический расчет d_k и d_v"""
@@ -110,6 +120,13 @@ class TrainingConfig:
 
     # Gradient checkpointing для экономии памяти
     use_gradient_checkpointing: bool = True
+
+    # Dynamic attention pruning для экономии вычислений
+    use_dynamic_attention: bool = False
+
+    # Параметры для dynamic attention
+    attention_prune_ratio: float = 0.2  # доля токенов/голов для отсечения
+    attention_threshold: float = 0.1  # порог для pruning
 
     # Seed для воспроизводимости
     seed: int = 42

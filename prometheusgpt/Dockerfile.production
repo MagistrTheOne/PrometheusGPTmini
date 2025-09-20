@@ -1,0 +1,72 @@
+# PrometheusGPT Mini - Production Dockerfile
+# Author: MagistrTheOne, Krasnodar, 2025
+
+# Multi-stage build для оптимизации размера
+FROM nvidia/cuda:11.8-devel-ubuntu22.04 as builder
+
+# Установка системных зависимостей для сборки
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.10-venv \
+    python3.10-dev \
+    python3-pip \
+    build-essential \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Создание пользователя
+RUN useradd -m -s /bin/bash prometheusgpt
+
+# Установка рабочей директории
+WORKDIR /home/prometheusgpt/app
+
+# Копирование файлов зависимостей
+COPY --chown=prometheusgpt:prometheusgpt requirements.txt .
+
+# Создание виртуальной среды и установка зависимостей
+RUN python3.10 -m venv venv && \
+    ./venv/bin/pip install --no-cache-dir --upgrade pip && \
+    ./venv/bin/pip install --no-cache-dir -r requirements.txt
+
+# Production stage
+FROM nvidia/cuda:11.8-runtime-ubuntu22.04
+
+# Установка только runtime зависимостей
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.10-venv \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Создание пользователя
+RUN useradd -m -s /bin/bash prometheusgpt
+
+# Установка рабочей директории
+WORKDIR /home/prometheusgpt/app
+
+# Копирование виртуальной среды из builder stage
+COPY --from=builder --chown=prometheusgpt:prometheusgpt /home/prometheusgpt/app/venv ./venv
+
+# Копирование исходного кода
+COPY --chown=prometheusgpt:prometheusgpt src/ ./src/
+COPY --chown=prometheusgpt:prometheusgpt README.md ./
+
+# Создание директорий для данных
+RUN mkdir -p data models logs checkpoints monitoring
+
+# Переменные окружения
+ENV PYTHONPATH=/home/prometheusgpt/app
+ENV CUDA_VISIBLE_DEVICES=0
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Порт
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Запуск production API
+CMD ["./venv/bin/python", "src/api/production_api.py"]

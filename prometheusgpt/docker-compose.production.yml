@@ -1,0 +1,146 @@
+# PrometheusGPT Mini - Production Docker Compose
+# Author: MagistrTheOne, Krasnodar, 2025
+
+version: '3.8'
+
+services:
+  # Основной API сервис
+  prometheusgpt-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    container_name: prometheusgpt-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/home/prometheusgpt/app/data
+      - ./checkpoints:/home/prometheusgpt/app/checkpoints
+      - ./logs:/home/prometheusgpt/app/logs
+      - ./monitoring:/home/prometheusgpt/app/monitoring
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - MODEL_PATH=/home/prometheusgpt/app/checkpoints/best_model.pt
+      - TOKENIZER_PATH=/home/prometheusgpt/app/tokenizer
+      - PORT=8000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - prometheusgpt-network
+
+  # Training сервис (опциональный)
+  prometheusgpt-training:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    container_name: prometheusgpt-training
+    volumes:
+      - ./data:/home/prometheusgpt/app/data
+      - ./checkpoints:/home/prometheusgpt/app/checkpoints
+      - ./logs:/home/prometheusgpt/app/logs
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONPATH=/home/prometheusgpt/app
+    command: ["./venv/bin/python", "src/train/full_train.py", "--data_dir", "data", "--checkpoint_dir", "checkpoints"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: "no"  # Training запускается вручную
+    profiles:
+      - training
+    networks:
+      - prometheusgpt-network
+
+  # Prometheus мониторинг
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheusgpt-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    restart: unless-stopped
+    networks:
+      - prometheusgpt-network
+
+  # Grafana дашборды
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: prometheusgpt-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+    networks:
+      - prometheusgpt-network
+
+  # Nginx reverse proxy (опциональный)
+  nginx:
+    image: nginx:alpine
+    container_name: prometheusgpt-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./monitoring/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./monitoring/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - prometheusgpt-api
+    restart: unless-stopped
+    profiles:
+      - nginx
+    networks:
+      - prometheusgpt-network
+
+  # Redis для кэширования (опциональный)
+  redis:
+    image: redis:7-alpine
+    container_name: prometheusgpt-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    profiles:
+      - cache
+    networks:
+      - prometheusgpt-network
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  redis_data:
+
+networks:
+  prometheusgpt-network:
+    driver: bridge

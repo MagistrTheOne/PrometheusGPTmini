@@ -1,0 +1,7 @@
+{
+  "vocab_size": 3000,
+  "character_coverage": 0.9995,
+  "max_sentence_length": 512,
+  "training_texts": 19998,
+  "author_tokens": 114
+}

@@ -1,0 +1,15 @@
+# PrometheusGPT Mini - Grafana Dashboards
+# Author: MagistrTheOne, Krasnodar, 2025
+
+apiVersion: 1
+
+providers:
+  - name: 'PrometheusGPT Dashboards'
+    orgId: 1
+    folder: 'PrometheusGPT'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
