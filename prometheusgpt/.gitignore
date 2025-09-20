@@ -1,0 +1,73 @@
+# PrometheusGPT Mini - Git Ignore
+# Author: MagistrTheOne, Krasnodar, 2025
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+data/
+models/
+logs/
+*.pkl
+*.bin
+*.pth
+*.pt
+*.h5
+*.model
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+
+# Docker
+.docker/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Monitoring
+prometheus_data/
