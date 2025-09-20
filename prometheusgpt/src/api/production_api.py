@@ -23,7 +23,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 import uvicorn
 
 # Добавляем путь к проекту
@@ -53,7 +53,8 @@ class GenerateRequest(BaseModel):
     length_penalty: float = Field(1.0, ge=0.1, le=2.0, description="Штраф за длину")
     early_stopping: bool = Field(True, description="Остановка при достижении EOS токена")
     
-    @validator('prompt')
+    @field_validator('prompt')
+    @classmethod
     def validate_prompt(cls, v):
         if not v.strip():
             raise ValueError('Prompt cannot be empty')
@@ -105,7 +106,7 @@ class ModelInfoResponse(BaseModel):
     model_size: str = Field(..., description="Размер модели")
     total_parameters: int = Field(..., description="Общее количество параметров")
     trainable_parameters: int = Field(..., description="Количество обучаемых параметров")
-    model_config: Dict[str, Any] = Field(..., description="Конфигурация модели")
+    model_configuration: Dict[str, Any] = Field(..., description="Конфигурация модели")
     device: str = Field(..., description="Устройство выполнения")
     precision: str = Field(..., description="Точность вычислений")
 
@@ -179,15 +180,7 @@ class ModelManager:
             logger.info("Loading PrometheusGPT Mini model...")
             
             # Создаем модель
-            self.model = PrometheusGPTMini(
-                vocab_size=model_config.vocab_size,
-                d_model=model_config.d_model,
-                n_layers=model_config.n_layers,
-                n_heads=model_config.n_heads,
-                d_ff=model_config.d_ff,
-                max_seq_length=model_config.max_seq_length,
-                dropout=model_config.dropout
-            )
+            self.model = PrometheusGPTMini(config=model_config)
             
             # Загружаем веса если есть
             if model_path and Path(model_path).exists():
@@ -205,10 +198,27 @@ class ModelManager:
             # Создаем токенизатор
             self.tokenizer = AdvancedBPETokenizer()
             
-            if tokenizer_path and Path(tokenizer_path).exists():
-                self.tokenizer.load(tokenizer_path)
-                logger.info(f"Tokenizer loaded from {tokenizer_path}")
-            else:
+            # Пытаемся загрузить токенизатор из разных мест
+            tokenizer_paths = [
+                tokenizer_path,
+                "demo_tokenizer.model",
+                "tokenizer/demo_tokenizer.model",
+                "data/demo_tokenizer.model"
+            ]
+            
+            tokenizer_loaded = False
+            for path in tokenizer_paths:
+                if path and Path(path).exists():
+                    try:
+                        self.tokenizer.load(path)
+                        logger.info(f"Tokenizer loaded from {path}")
+                        tokenizer_loaded = True
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to load tokenizer from {path}: {e}")
+                        continue
+            
+            if not tokenizer_loaded:
                 logger.warning("Tokenizer not found, using default")
             
             self.is_loaded = True
@@ -488,7 +498,7 @@ async def model_info():
         model_size=info["model_size"],
         total_parameters=info["total_parameters"],
         trainable_parameters=info["trainable_parameters"],
-        model_config=info["model_config"],
+        model_configuration=info["model_config"],
         device=info["device"],
         precision=info["precision"]
     )
