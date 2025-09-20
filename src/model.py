@@ -257,7 +257,11 @@ class PrometheusGPT(nn.Module):
         # Трансформерные слои
         for layer in self.layers:
             if self.config.use_gradient_checkpointing and self.training:
-                x = torch.utils.checkpoint.checkpoint(layer, x, causal_mask)
+                try:
+                    x = torch.utils.checkpoint.checkpoint(layer, x, causal_mask, use_reentrant=False)
+                except AttributeError:
+                    # Fallback для старых версий PyTorch
+                    x = torch.utils.checkpoint.checkpoint(layer, x, causal_mask)
             else:
                 x = layer(x, causal_mask)
 

@@ -68,7 +68,7 @@ class MultilingualTokenizer:
             "--normalization_rule_name=nmt_nfkc",  # Нормализация для разных языков
             "--remove_extra_whitespaces=true",
             "--split_digits=true",
-            "--user_defined_symbols=<pad>,<unk>,<bos>,<eos>,<mask>",
+            "--user_defined_symbols=<pad>,<bos>,<eos>,<mask>",
         ]
 
         # Добавляем языковые маркеры

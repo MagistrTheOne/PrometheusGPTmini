@@ -10,7 +10,7 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 import logging
 from tqdm import tqdm
-import evaluate
+import evaluate as evaluate_lib
 from config import ModelConfig
 from src.model import PrometheusGPT
 from src.tokenizer import MultilingualTokenizer
@@ -32,8 +32,8 @@ class ModelEvaluator:
         self.tokenizer = tokenizer
 
         # Метрики
-        self.bleu_metric = evaluate.load("bleu")
-        self.rouge_metric = evaluate.load("rouge")
+        self.bleu_metric = evaluate_lib.load("bleu")
+        self.rouge_metric = evaluate_lib.load("rouge")
 
         # Переводим модель в eval режим
         self.model.eval()
